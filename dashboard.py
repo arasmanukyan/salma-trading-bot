@@ -59,4 +59,5 @@ def index():
     return render_template_string(HTML, bist_bal=bals.get("BIST", 100000.0), crypto_bal=bals.get("CRYPTO", 1000.0), bist_pos=bist_pos, crypto_pos=crypto_pos, positions=positions, trades=trades, radar=radar)
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    import os; app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+
