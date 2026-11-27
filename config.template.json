@@ -1,0 +1,104 @@
+{
+  "general": {
+    "timezone": "Europe/Istanbul",
+    "data_lookback_days": 60,
+    "timeframe": "1h",
+    "backtest_mode": false
+  },
+  "markets": {
+    "BIST": {
+      "enabled": true,
+      "currency": "TRY",
+      "initial_balance": 100000.0,
+      "commission_rate": 0.002,
+      "min_commission": 1.0,
+      "symbols": [
+        "THYAO.IS",
+        "ASELS.IS",
+        "GARAN.IS",
+        "AKBNK.IS",
+        "SISE.IS",
+        "TUPRS.IS",
+        "KCHOL.IS",
+        "EREGL.IS",
+        "FROTO.IS",
+        "BIMAS.IS"
+      ],
+      "scan_all": true,
+      "max_positions": 3,
+      "max_position_pct": 0.25
+    },
+    "CRYPTO": {
+      "enabled": true,
+      "currency": "USDT",
+      "initial_balance": 1000.0,
+      "commission_rate": 0.001,
+      "min_commission": 0.5,
+      "symbols": [
+        "BTC/USDT",
+        "ETH/USDT",
+        "BNB/USDT",
+        "SOL/USDT",
+        "ADA/USDT",
+        "XRP/USDT",
+        "DOGE/USDT",
+        "AVAX/USDT",
+        "DOT/USDT",
+        "LINK/USDT"
+      ],
+      "scan_all": true,
+      "max_positions": 10,
+      "max_position_pct": 0.1
+    }
+  },
+  "indicators": {
+    "SALMA": {
+      "length": 45,
+      "extra_smooth": 1,
+      "sd_width": 0.3,
+      "sd_length": 5,
+      "source": "close"
+    },
+    "TwinRangeFilter": {
+      "fast_period": 12,
+      "fast_range": 1.0,
+      "slow_period": 4,
+      "slow_range": 2.0,
+      "source": "close"
+    }
+  },
+  "strategy": {
+    "entry_confirmation": "SALMA_COLOR_CHANGE_RED_TO_GREEN",
+    "exit_confirmation": "SALMA_COLOR_CHANGE_GREEN_TO_RED",
+    "require_trf_long_first": true,
+    "position_sizing": {
+      "BIST": {
+        "max_position_pct": 0.25,
+        "max_positions": 3
+      },
+      "CRYPTO": {
+        "max_position_pct": 0.1,
+        "max_positions": 10
+      },
+      "max_position_pct": 0.1,
+      "max_positions": 10
+    },
+    "stop_loss_pct": 0.05
+  },
+  "telegram": {
+    "enabled": true,
+    "config_path": "C:\\Users\\Hp\\Desktop\\trader rehberi\\tcell_demo_bot.py",
+    "fallback_token": "",
+    "fallback_chat_id": "",
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "database": {
+    "path": "trading_bot.db"
+  },
+  "chart": {
+    "enabled": true,
+    "candles_to_show": 200,
+    "update_interval_seconds": 300
+  }
+}
