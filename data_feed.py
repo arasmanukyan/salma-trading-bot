@@ -1,4 +1,4 @@
-"""
+﻿"""
 Data Feed Module
 Handles fetching market data from BIST (yfinance) and Crypto (ccxt/Binance).
 """
@@ -27,7 +27,7 @@ class DataFeed:
         self.timeframe = config.get('general', {}).get('timeframe', '1h')
 
         # Initialize Binance for crypto
-        self.binance = ccxt.binance({
+        self.binance = ccxt.kucoin({
             'enableRateLimit': True,
             'options': {
                 'defaultType': 'spot'

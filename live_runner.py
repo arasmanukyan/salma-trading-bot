@@ -1,5 +1,5 @@
-import time, threading, logging, json, urllib.request, urllib.parse
-from datetime import datetime
+﻿import time, threading, logging, json, urllib.request, urllib.parse
+from datetime import datetime, timezone, timedelta
 import ccxt, yfinance as yf, pandas as pd
 from bot import TradingBot
 from indicators import calculate_all_indicators
@@ -31,7 +31,7 @@ def get_all_bist_symbols():
     return FALLBACK_BIST
 
 def get_all_binance_usdt_symbols(min_vol_usdt=1000000):
-    ex = ccxt.binance({"enableRateLimit": True})
+    ex = ccxt.kucoin({"enableRateLimit": True})
     markets = ex.load_markets()
     tickers = ex.fetch_tickers()
     skip_words = ("UP/", "DOWN/", "BULL/", "BEAR/", "USDC/", "FDUSD/", "TUSD/", "USDP/", "EUR/", "TRY/")
@@ -123,7 +123,7 @@ class LiveEngine:
         prev = df.iloc[-3]    # Bir onceki kapanmis mum
         price = float(df.iloc[-1]["close"])
         if int(latest["trf_long"]) == 1 and int(latest["salma_color"]) == 1:
-            self.radar_rows.append((market, symbol, price, "YEŞL", 1, datetime.now().strftime("%H:%M:%S")))
+            self.radar_rows.append((market, symbol, price, "YEŞL", 1, datetime.now(timezone(timedelta(hours=3))).strftime("%H:%M:%S")))
         sl_pct = self.cfg.get("strategy", {}).get("stop_loss_pct", 0.05)
 
         if pm.has_position(market, symbol):
@@ -202,3 +202,4 @@ class LiveEngine:
 
 if __name__ == "__main__":
     LiveEngine().run_forever()
+
