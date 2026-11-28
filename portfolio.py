@@ -45,6 +45,9 @@ class Position:
     current_price: float
     unrealized_pnl: float
     unrealized_pnl_pct: float
+    highest_price: float = 0.0  # For trailing stop
+    stop_loss: float = 0.0
+    take_profit: float = 0.0
 
 
 class PortfolioManager:
@@ -147,9 +150,17 @@ class PortfolioManager:
                     entry_time TEXT NOT NULL,
                     stop_loss REAL,
                     take_profit REAL,
+                    highest_price REAL DEFAULT 0,
                     UNIQUE(market, symbol)
                 )
             ''')
+
+            # Migration: add highest_price column if not exists
+            cursor.execute("PRAGMA table_info(positions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'highest_price' not in columns:
+                cursor.execute('ALTER TABLE positions ADD COLUMN highest_price REAL DEFAULT 0')
+                logger.info("Migrated database: added highest_price column to positions table")
 
             # Daily stats table
             cursor.execute('''
@@ -371,15 +382,15 @@ class PortfolioManager:
             return cursor.lastrowid
 
     def _save_position(self, market: str, symbol: str, quantity: float, entry_price: float,
-                       stop_loss: float = None, take_profit: float = None):
+                       stop_loss: float = None, take_profit: float = None, highest_price: float = 0.0):
         """Save position to database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO positions (market, symbol, quantity, entry_price, entry_time, stop_loss, take_profit)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO positions (market, symbol, quantity, entry_price, entry_time, stop_loss, take_profit, highest_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (market, symbol, quantity, entry_price,
-                  datetime.now(self.timezone).isoformat(), stop_loss, take_profit))
+                  datetime.now(self.timezone).isoformat(), stop_loss, take_profit, highest_price))
             conn.commit()
 
     def _update_position_quantity(self, market: str, symbol: str, new_quantity: float):
@@ -389,6 +400,15 @@ class PortfolioManager:
             cursor.execute('''
                 UPDATE positions SET quantity = ? WHERE market = ? AND symbol = ?
             ''', (new_quantity, market, symbol))
+            conn.commit()
+
+    def update_position_highest_price(self, market: str, symbol: str, highest_price: float):
+        """Update position highest price for trailing stop."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE positions SET highest_price = ? WHERE market = ? AND symbol = ?
+            ''', (highest_price, market, symbol))
             conn.commit()
 
     def _remove_position(self, market: str, symbol: str):
@@ -403,13 +423,13 @@ class PortfolioManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT quantity, entry_price, entry_time, stop_loss, take_profit
+                SELECT quantity, entry_price, entry_time, stop_loss, take_profit, highest_price
                 FROM positions WHERE market = ? AND symbol = ?
             ''', (market, symbol))
             row = cursor.fetchone()
 
             if row:
-                quantity, entry_price, entry_time, stop_loss, take_profit = row
+                quantity, entry_price, entry_time, stop_loss, take_profit, highest_price = row
                 return Position(
                     market=market,
                     symbol=symbol,
@@ -417,7 +437,10 @@ class PortfolioManager:
                     entry_price=entry_price,
                     current_price=entry_price,  # Will be updated externally
                     unrealized_pnl=0,
-                    unrealized_pnl_pct=0
+                    unrealized_pnl_pct=0,
+                    highest_price=highest_price or 0.0,
+                    stop_loss=stop_loss or 0.0,
+                    take_profit=take_profit or 0.0
                 )
         return None
 
@@ -430,14 +453,14 @@ class PortfolioManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT symbol, quantity, entry_price, entry_time, stop_loss, take_profit
+                SELECT symbol, quantity, entry_price, entry_time, stop_loss, take_profit, highest_price
                 FROM positions WHERE market = ?
             ''', (market,))
             rows = cursor.fetchall()
 
             positions = []
             for row in rows:
-                symbol, quantity, entry_price, entry_time, stop_loss, take_profit = row
+                symbol, quantity, entry_price, entry_time, stop_loss, take_profit, highest_price = row
                 positions.append(Position(
                     market=market,
                     symbol=symbol,
@@ -445,7 +468,10 @@ class PortfolioManager:
                     entry_price=entry_price,
                     current_price=entry_price,
                     unrealized_pnl=0,
-                    unrealized_pnl_pct=0
+                    unrealized_pnl_pct=0,
+                    highest_price=highest_price or 0.0,
+                    stop_loss=stop_loss or 0.0,
+                    take_profit=take_profit or 0.0
                 ))
             return positions
 

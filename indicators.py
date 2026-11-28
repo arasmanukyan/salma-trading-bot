@@ -1,6 +1,7 @@
 """
 Technical Indicators Module
-Contains SALMA v3.0 (Smooth and Lazy Moving Average) and Twin Range Filter implementations.
+Contains SALMA v3.0 (Smooth and Lazy Moving Average), Twin Range Filter,
+RSI, RVOL, and ATR implementations.
 """
 
 import numpy as np
@@ -32,6 +33,68 @@ def sma(series: pd.Series, length: int) -> pd.Series:
 def stdev(series: pd.Series, length: int) -> pd.Series:
     """Standard Deviation"""
     return series.rolling(length).std(ddof=0)
+
+
+def rsi(series: pd.Series, length: int = 14) -> pd.Series:
+    """
+    Relative Strength Index (RSI)
+
+    Parameters:
+    - series: Price series (typically close)
+    - length: RSI period (default 14)
+
+    Returns:
+    - RSI values (0-100)
+    """
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+
+    avg_gain = rma(gain, length)
+    avg_loss = rma(loss, length)
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi_values = 100 - (100 / (1 + rs))
+    return rsi_values.fillna(50)
+
+
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, length: int = 14) -> pd.Series:
+    """
+    Average True Range (ATR) - Wilder's smoothing
+
+    Parameters:
+    - high: High price series
+    - low: Low price series
+    - close: Close price series
+    - length: ATR period (default 14)
+
+    Returns:
+    - ATR values
+    """
+    prev_close = close.shift(1)
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr_values = rma(true_range, length)
+    return atr_values
+
+
+def rvol(volume: pd.Series, length: int = 20) -> pd.Series:
+    """
+    Relative Volume (RVOL) - current volume vs average volume over lookback period
+
+    Parameters:
+    - volume: Volume series
+    - length: Lookback period for average volume (default 20)
+
+    Returns:
+    - RVOL ratio (current volume / average volume)
+    """
+    avg_volume = sma(volume, length)
+    rvol_values = volume / avg_volume.replace(0, np.nan)
+    return rvol_values.fillna(1.0)
 
 
 def salma_v3(
@@ -179,6 +242,47 @@ def twin_range_filter(
     return trf_fast, trf_slow, trf_signal
 
 
+def calculate_trend_age(salma_color: pd.Series, trf_long: pd.Series) -> pd.Series:
+    """
+    Calculate trend age - number of bars since trend started (TRF Long + SALMA Green)
+
+    Parameters:
+    - salma_color: SALMA color series (1=green, -1=red)
+    - trf_long: TRF long signal series (1=long, 0=not long)
+
+    Returns:
+    - trend_age: Number of bars since trend conditions were met
+    """
+    trend_active = (salma_color == 1) & (trf_long == 1)
+    trend_age = pd.Series(0, index=salma_color.index, dtype=int)
+
+    for i in range(len(trend_active)):
+        if trend_active.iloc[i]:
+            # Count consecutive bars backwards
+            age = 0
+            for j in range(i, -1, -1):
+                if trend_active.iloc[j]:
+                    age += 1
+                else:
+                    break
+            trend_age.iloc[i] = age
+        else:
+            trend_age.iloc[i] = 0
+
+    return trend_age
+
+
+def calculate_salma_proximity(close: pd.Series, salma_line: pd.Series) -> pd.Series:
+    """
+    Calculate how close price is to SALMA line as percentage
+
+    Returns:
+    - proximity_pct: |close - salma| / salma * 100
+    """
+    proximity = ((close - salma_line).abs() / salma_line * 100).fillna(100)
+    return proximity
+
+
 def calculate_all_indicators(
     df: pd.DataFrame,
     salma_params: dict = None,
@@ -188,7 +292,7 @@ def calculate_all_indicators(
     Calculate all indicators and add them to the DataFrame.
 
     Parameters:
-    - df: DataFrame with OHLCV data (must have 'close' column)
+    - df: DataFrame with OHLCV data (must have 'close', 'high', 'low', 'volume' columns)
     - salma_params: Dict with SALMA parameters
     - trf_params: Dict with Twin Range Filter parameters
 
@@ -202,6 +306,9 @@ def calculate_all_indicators(
         trf_params = {'fast_period': 12, 'fast_range': 1.0, 'slow_period': 4, 'slow_range': 2.0}
 
     close = df['close']
+    high = df['high']
+    low = df['low']
+    volume = df['volume']
 
     # SALMA v3.0
     salma_line, salma_color = salma_v3(close, **salma_params)
@@ -222,6 +329,29 @@ def calculate_all_indicators(
     df['trf_long_prev'] = df['trf_long'].shift(1)
     df['trf_long_signal'] = (df['trf_long'] == 1) & (df['trf_long_prev'] == 0)
 
+    # RSI(14)
+    df['rsi'] = rsi(close, 14)
+
+    # ATR(14)
+    df['atr'] = atr(high, low, close, 14)
+
+    # RVOL(20)
+    df['rvol'] = rvol(volume, 20)
+
+    # Trend age (bars since TRF Long + SALMA Green started)
+    df['trend_age'] = calculate_trend_age(salma_color, df['trf_long'])
+
+    # SALMA proximity (%)
+    df['salma_proximity_pct'] = calculate_salma_proximity(close, salma_line)
+
+    # Pullback detection: price pulled back to within 1.5% of SALMA while trend active
+    df['near_salma'] = (df['salma_proximity_pct'] <= 1.5) & (df['trend_age'] > 0)
+
+    # Re-acceleration: after pullback, price moves up and SALMA turns green again
+    # This is captured by: was near SALMA, now SALMA green and price above SALMA
+    df['pulled_back_near_salma'] = df['near_salma'].shift(1)
+    df['reaccelerated'] = df['pulled_back_near_salma'] & (df['salma_color'] == 1) & (close > df['salma'])
+
     return df
 
 
@@ -239,7 +369,9 @@ if __name__ == "__main__":
     print(f"Data shape: {data.shape}")
     print(f"Columns: {data.columns.tolist()}")
     print(f"\nLast 5 rows:")
-    print(data[['close', 'salma', 'salma_color', 'trf_fast', 'trf_slow', 'trf_signal']].tail())
+    print(data[['close', 'salma', 'salma_color', 'trf_fast', 'trf_slow', 'trf_signal', 'rsi', 'atr', 'rvol', 'trend_age', 'salma_proximity_pct']].tail())
     print(f"\nSALMA color changes (red->green): {data['salma_red_to_green'].sum()}")
     print(f"SALMA color changes (green->red): {data['salma_green_to_red'].sum()}")
     print(f"TRF Long signals: {data['trf_long_signal'].sum()}")
+    print(f"RSI range: {data['rsi'].min():.1f} - {data['rsi'].max():.1f}")
+    print(f"RVOL range: {data['rvol'].min():.2f} - {data['rvol'].max():.2f}")
