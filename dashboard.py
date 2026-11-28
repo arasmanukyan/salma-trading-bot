@@ -29,14 +29,14 @@ th{background:#1f242c;color:#8b949e}
 <h2>Açık Pozisyonlar</h2>
 <table><tr><th>Piyasa</th><th>Sembol</th><th>Miktar</th><th>Giriş Fiyatı</th><th>Giriş Zamanı</th></tr>
 {% for p in positions %}
-<tr><td>{{ p[1] }}</td><td><b>{{ p[2] }}</b></td><td>{{ "%.4f"|format(p[3]) }}</td><td>{{ "%.4f"|format(p[4]) }}</td><td>{{ p[5] }}</td></tr>
+<tr><td>{{ p.market }}</td><td><b>{{ p.symbol }}</b></td><td>{{ "%.4f"|format(p.quantity) }}</td><td>{{ "%.4f"|format(p.entry_price) }}</td><td>{{ p.entry_time }}</td></tr>
 {% else %}<tr><td colspan="5" style="color:#8b949e">Henüz açık pozisyon yok. Tarama devam ediyor...</td></tr>{% endfor %}
 </table>
 <h2>Son Kapanan şlemler</h2>
 <table><tr><th>Piyasa</th><th>Sembol</th><th>şlem</th><th>Fiyat</th><th>Kâr/Zarar</th><th>Zaman</th></tr>
 {% for t in trades %}
-<tr><td>{{ t[1] }}</td><td><b>{{ t[2] }}</b></td><td>{{ t[3] }}</td><td>{{ "%.4f"|format(t[4]) }}</td>
-<td class="{{ 'pos' if (t[6] or 0) >= 0 else 'neg' }}">{{ "%.2f"|format(t[6] or 0) }}</td><td>{{ t[7] }}</td></tr>
+<tr><td>{{ t.market }}</td><td><b>{{ t.symbol }}</b></td><td>{{ t.side }}</td><td>{{ "%.4f"|format(t.price) }}</td>
+<td class="{{ 'pos' if (t.pnl or 0) >= 0 else 'neg' }}">{{ "%.2f"|format(t.pnl or 0) }}</td><td>{{ t.timestamp }}</td></tr>
 {% else %}<tr><td colspan="6" style="color:#8b949e">Henüz tamamlanan işlem kaydı yok.</td></tr>{% endfor %}
 </table><h2>Canlı Trend Radarı (TRF Long + SALMA Yeşil Adaylar)</h2>
 <table><tr><th>Piyasa</th><th>Sembol</th><th>Son Fiyat</th><th>SALMA</th><th>TRF</th><th>Tarama Saati</th></tr>
@@ -48,14 +48,15 @@ th{background:#1f242c;color:#8b949e}
 @app.route("/")
 def index():
     con = sqlite3.connect("trading_bot.db")
+    con.row_factory = sqlite3.Row  # Enable column name access
     cur = con.cursor()
     bals = dict(cur.execute("SELECT market, current_balance FROM balances").fetchall())
     positions = cur.execute("SELECT * FROM positions").fetchall()
     trades = cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 30").fetchall()
     radar = cur.execute("SELECT * FROM radar").fetchall()
     con.close()
-    bist_pos = sum(1 for p in positions if p[1] == "BIST")
-    crypto_pos = sum(1 for p in positions if p[1] == "CRYPTO")
+    bist_pos = sum(1 for p in positions if p['market'] == "BIST")
+    crypto_pos = sum(1 for p in positions if p['market'] == "CRYPTO")
     return render_template_string(HTML, bist_bal=bals.get("BIST", 100000.0), crypto_bal=bals.get("CRYPTO", 1000.0), bist_pos=bist_pos, crypto_pos=crypto_pos, positions=positions, trades=trades, radar=radar)
 
 if __name__ == "__main__":
