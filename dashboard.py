@@ -35,6 +35,9 @@ h2{font-size:clamp(15px,2vw,20px)}
 .card h3{margin:0 0 8px 0;color:#8b949e;font-size:13px;text-transform:uppercase;letter-spacing:.02em}
 .val{font-size:26px;font-weight:700;color:#fff;word-break:break-word}
 .pos{color:#3fb950} .neg{color:#f85149}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.badge-buy{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.4)}
+.badge-sell{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.4)}
 table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:24px}
 th,td{padding:12px 14px;text-align:left;border-bottom:1px solid #21262d;font-size:14px;vertical-align:middle}
 th{background:#1f242c;color:#8b949e;white-space:nowrap}
@@ -99,15 +102,21 @@ form.inline{margin:0}
 {% else %}<tr><td class="td-empty" colspan="8" style="color:#8b949e">Henüz açık pozisyon yok. Tarama devam ediyor...</td></tr>{% endfor %}
 </tbody>
 </table>
-<h2>Son Kapanan şlemler</h2>
+<h2>İşlem Geçmişi (Alım / Satım)</h2>
 <table class="responsive">
-<thead><tr><th>Piyasa</th><th>Sembol</th><th>şlem</th><th>Fiyat</th><th>Kâr/Zarar</th><th>Zaman</th></tr></thead>
+<thead><tr><th>Piyasa</th><th>Sembol</th><th>İşlem</th><th>Fiyat</th><th>Kâr/Zarar</th><th>Zaman</th></tr></thead>
 <tbody>
 {% for t in trades %}
 <tr>
   <td data-label="Piyasa">{{ t.market }}</td>
   <td data-label="Sembol"><b>{{ t.symbol }}</b></td>
-  <td data-label="şlem">{{ t.side }}</td>
+  <td data-label="İşlem">
+    {% if t.side and t.side.upper().startswith('SELL') %}
+      <span class="badge badge-sell">SATIŞ (SELL)</span>
+    {% else %}
+      <span class="badge badge-buy">ALIM (BUY)</span>
+    {% endif %}
+  </td>
   <td data-label="Fiyat">{{ t.price|fmt_price }}</td>
   <td data-label="Kâr/Zarar" class="{{ 'pos' if (t.pnl or 0) >= 0 else 'neg' }}">{{ "%.2f"|format(t.pnl or 0) }}</td>
   <td data-label="Zaman">{{ t.timestamp }}</td>
