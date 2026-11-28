@@ -32,20 +32,25 @@ def get_all_bist_symbols():
     return FALLBACK_BIST
 
 def get_all_binance_usdt_symbols(min_vol_usdt=1000000):
-    ex = ccxt.kucoin({"enableRateLimit": True})
-    markets = ex.load_markets()
-    tickers = ex.fetch_tickers()
-    skip_words = ("UP/", "DOWN/", "BULL/", "BEAR/", "USDC/", "FDUSD/", "TUSD/", "USDP/", "EUR/", "TRY/")
-    syms = []
-    for sym, m in markets.items():
-        if not m.get("active") or not m.get("spot") or not sym.endswith("/USDT"):
-            continue
-        if any(w in sym for w in skip_words):
-            continue
-        qv = tickers.get(sym, {}).get("quoteVolume") or 0
-        if qv >= min_vol_usdt:
-            syms.append(sym)
-    return sorted(syms)
+    """Binance Spot /USDT evreni (harici kullanim icin ince sarmalayici).
+
+    Tarama icin asil kaynak DataFeed.fetch_binance_usdt_symbols()'dir.
+    """
+    from data_feed import (
+        create_binance_exchange, is_binance_region_block, filter_binance_usdt_spot,
+    )
+    ex = create_binance_exchange()
+    try:
+        markets = ex.load_markets()
+        tickers = ex.fetch_tickers()
+    except Exception as e:
+        if is_binance_region_block(e):
+            ex = create_binance_exchange(data_vision=True)
+            markets = ex.load_markets(True)
+            tickers = ex.fetch_tickers()
+        else:
+            raise
+    return filter_binance_usdt_spot(markets, tickers, min_vol_usdt)
 
 
 class LiveEngine:
@@ -412,11 +417,14 @@ class LiveEngine:
         self.candidates = []
         log.info("=== TAM PYASA TARAMASI BAŞLADI ===")
 
-        # 1. CRYPTO (7/24 Tum Binance USDT)
+        # 1. CRYPTO (7/24) — Binance Spot evreni
+        pm = self.bot.portfolio
+        scanned = set()
         try:
-            cry_syms = get_all_binance_usdt_symbols(min_vol_usdt=1000000)
-            log.info(f"Binance aktif USDT parite sayısı: {len(cry_syms)}")
+            cry_syms = self.bot.data_feed.fetch_binance_usdt_symbols(min_vol_usdt=1000000)
+            log.info(f"Binance Spot aktif USDT parite sayısı: {len(cry_syms)}")
             for sym in cry_syms:
+                scanned.add(sym)
                 try:
                     df = self.bot.data_feed.fetch_crypto_data(sym)
                     if df is not None and len(df) >= 60:
@@ -425,6 +433,22 @@ class LiveEngine:
                     continue
         except Exception as e:
             log.error(f"Kripto tarama hatasi: {e}")
+
+        # 1b. Binance listesinde olmayan AÇIK pozisyonlar için KuCoin fallback ile çıkış kontrolü.
+        # (Yeni alım yapılmaz: bu semboller zaten açık pozisyon olduğu için sadece stop/satış yönetilir.)
+        try:
+            for pos in pm.get_open_positions("CRYPTO"):
+                if pos.symbol in scanned:
+                    continue
+                try:
+                    df = self.bot.data_feed.fetch_crypto_data(pos.symbol)
+                    if df is not None and len(df) >= 60:
+                        log.info(f"{pos.symbol}: Binance listesinde yok, KuCoin fallback ile pozisyon kontrol ediliyor.")
+                        self.check_stop_loss_and_signals("CRYPTO", pos.symbol, df)
+                except Exception:
+                    continue
+        except Exception as e:
+            log.error(f"Acik pozisyon fallback kontrol hatasi: {e}")
 
         # 2. BIST (Tum BIST hisseleri) - Only on trading days
         if self.is_market_open("BIST"):
