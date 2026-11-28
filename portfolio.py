@@ -14,6 +14,8 @@ import pytz
 import requests
 import re
 
+from formatting import fmt_price
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -570,7 +572,7 @@ class PortfolioManager:
 📊 <b>Sembol:</b> {trade.symbol}
 📈 <b>Yön:</b> {trade.side}
 📦 <b>Miktar:</b> {trade.quantity:.6f}
-💵 <b>Fiyat:</b> {trade.price:.4f} {currency}
+💵 <b>Fiyat:</b> {fmt_price(trade.price)} {currency}
 💸 <b>Komisyon:</b> {trade.commission:.2f} {currency}
 {pnl_text}
 💼 <b>Güncel Bakiye:</b> {trade.balance_after:.2f} {currency}

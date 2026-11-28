@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import ccxt, yfinance as yf, pandas as pd
 from bot import TradingBot
 from indicators import calculate_all_indicators
+from formatting import fmt_price
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("LIVE_BOT")
@@ -102,7 +103,7 @@ class LiveEngine:
             return "Şu an açık pozisyon bulunmuyor."
         lines = ["<b>Açık Pozisyonlar:</b>"]
         for p in all_pos:
-            lines.append(f"- [{p.market}] <b>{p.symbol}</b> | Adet: {p.quantity:.4f} | Giriş: {p.entry_price:.4f}")
+            lines.append(f"- [{p.market}] <b>{p.symbol}</b> | Adet: {p.quantity:.4f} | Giriş: {fmt_price(p.entry_price)}")
         return "\n".join(lines)
 
     def is_market_open(self, market: str) -> bool:
@@ -320,10 +321,10 @@ class LiveEngine:
             # Determine effective stop loss
             if ts_activated and trailing_stop_price > 0:
                 effective_sl = trailing_stop_price
-                sl_reason = f"Trailing Stop ({trailing_stop_price:.4f})"
+                sl_reason = f"Trailing Stop ({fmt_price(trailing_stop_price)})"
             else:
                 effective_sl = self.calculate_stop_loss(market, entry_price, atr, pos.highest_price if hasattr(pos, 'highest_price') else None)
-                sl_reason = f"Stop Loss ({effective_sl:.4f})"
+                sl_reason = f"Stop Loss ({fmt_price(effective_sl)})"
 
             # Check exit conditions
             exit_triggered = False
@@ -344,7 +345,7 @@ class LiveEngine:
                 if trade:
                     self.send_tg(
                         f"🔴 <b>SATIŞ [{market}] {symbol}</b>\n"
-                        f"Fiyat: {current_price:.4f}\n"
+                        f"Fiyat: {fmt_price(current_price)}\n"
                         f"Sebep: {exit_reason}\n"
                         f"K/Z: {trade.pnl:+.2f} ({trade.pnl_pct:+.2f}%)"
                     )
@@ -461,7 +462,7 @@ class LiveEngine:
                 if trade:
                     self.send_tg(
                         f"🟢 <b>ALIM [{market}] {c['symbol']}</b>\n"
-                        f"Fiyat: {c['price']:.4f} | Adet: {c['qty']}\n"
+                        f"Fiyat: {fmt_price(c['price'])} | Adet: {c['qty']}\n"
                         f"Sinyal: {c['signal_type']} | Skor: {c['score']}/100\n"
                         f"RSI: {c['rsi']:.1f} | RVOL: {c['rvol']:.2f} | TrendYaş: {c['trend_age']}\n"
                         f"Kalan Kasa: {self.bot.portfolio.get_balance(market):,.2f}"
